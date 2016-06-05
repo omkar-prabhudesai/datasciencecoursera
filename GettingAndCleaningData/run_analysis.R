@@ -1,40 +1,69 @@
 library(data.table)
+
 ##Download and extract the data from URL
 dataUrl <- "https://d396qusza40orc.cloudfront.net/getdata%2Fprojectfiles%2FUCI%20HAR%20Dataset.zip"
 download.file(dataUrl,destfile = "projectdata.zip")
 unzip("projectdata.zip")
 
 ##Load test data set into different tables
-df_subj_test <- fread("./UCI HAR Dataset/test/subject_test.txt")
-df_X_test <- fread("./UCI HAR Dataset/test/X_test.txt", sep = ' ')
-df_Y_test <- fread("./UCI HAR Dataset/test/Y_test.txt")
+dfSubjectTest <- fread("./UCI HAR Dataset/test/subject_test.txt")
+dfTest <- fread("./UCI HAR Dataset/test/X_test.txt", sep = ' ')
+dfActivityTest <- fread("./UCI HAR Dataset/test/Y_test.txt")
 
 ##Load the training data into different tables
-df_subj_train <- fread("./UCI HAR Dataset/train/subject_train.txt")
-df_X_train <- fread("./UCI HAR Dataset/train/X_train.txt", sep = ' ')
-df_Y_train <- fread("./UCI HAR Dataset/train/Y_train.txt")
+dfSubjectTrain <- fread("./UCI HAR Dataset/train/subject_train.txt")
+dfTrain <- fread("./UCI HAR Dataset/train/X_train.txt", sep = ' ')
+dfActivityTrain<- fread("./UCI HAR Dataset/train/Y_train.txt")
 
-##Merge the X test and X train data sets created in above step
-df_X_all <- rbind(df_X_test,df_X_train)
+##Merge the subject test and subject train data sets created in above step
+dfSubjectAll <- rbind(dfSubjectTest,dfSubjectTest)
+setnames(dfSubjectAll,"V1","subject")
+
+##Merge the activity train and activity test data
+dfActivityAll <- rbind(dfActivityTest,dfActivityTrain)
+setnames(dfActivityAll,"V1","activityNum")
+
+##Merge Test (i.e. X_test and X_train) and Train data
+dtAll <- rbind(dfTest,dfTrain)
+
+dfSubjectAll <- cbind(dfSubjectAll,dfActivityAll)
+dtAll <- cbind(dfSubjectAll,dtAll)
+setkey(dtAll,subject,activityNum)
 
 ## Add column header to above data set
-df_features <- fread("./UCI HAR Dataset/features.txt")
-df_activity <- fread("./UCI HAR Dataset/activity_labels.txt")
-colnames(df_features) <- c("feature id","feature")
-colnames(df_activity)<-c("activity id","activity")
-colnames(df_X_all) <- df_features$feature
+dfFeatures <- fread("./UCI HAR Dataset/features.txt")
+setnames(dfFeatures,names(dfFeatures),c("featureId","featureName"))
+##Select only those measurement from features which are for mean and std
+dfSelectedFeatures <- dfFeatures[grepl("mean\\(\\)|std\\(\\)",featureName)]
+##To select the features from dtAll tables we will need to map selected
+##feature names to columns starting with V1,V2....Vn because dtAll table
+##contains columns with these names
+vfeatures <- paste0("V",dfSelectedFeatures$featureId)
+columns <- c(key(dtAll),vfeatures)
+#Now select these columns
+dtAll <- select(dtAll,dfSelectedFeatures$featureId)
 
-## Select ONLY columns which are mean, standard dev
-library(dplyr)
-mainTable <- select(df_X_all,matches("mean|std"))
-##Bind the subject and activity column
-df_subj_all <- rbind(df_subj_test,df_subj_train)
-df_Y_all <- rbind(df_Y_test,df_Y_train)
-colnames(df_Y_all)[1] <- "activity id"
-df_Y_all <- merge(df_Y_all,df_activity, by = "activity id")
+#Read acivity labes from activity_labels.txt
+dfActivityLables <- fread("./UCI HAR Dataset/activity_labels.txt")
+setnames(dfActivityLables,names(dfActivityLables),c("activityNum","activityName"))
 
-mainTable <- cbind(df_subj_all,df_Y_all$activity,mainTable)
-colnames(mainTable)[1] <- "subjetc id"
-colnames(mainTable)[2] <- "activity type"
+#merge activities with main table i.e. dtAll 
+dtAll <- merge(dtAll,dfActivityLables, by="activityNum",all.x = T)
+setkey(dtAll,subject,activityNum,activityName)
 
-write.table(mainTable,file = "tidydata.txt", row.names = FALSE)
+#reshape the table
+dtAll <- melt(dtAll,key(dtAll),variable.name = "featureId")
+dtAll <- merge(dtAll , dfSelectedFeatures[, list(featureId, featureName)], by="featureId", all.x=TRUE)
+
+#Cleanup feature names
+dtAll$featureName <- gsub('-mean',"Mean",dtAll$featureName)
+dtAll$featureName <- gsub('[-()]', '', dtAll$featureName)
+dtAll$featureName <- gsub('^t', 'TimeDomain_', dtAll$featureName)
+dtAll$featureName <- gsub('^f', 'FreqencyDomain_', dtAll$featureName)
+dtAll$featureName <- gsub('Acc', 'Accelerometer', dtAll$featureName)
+dtAll$featureName <- gsub('Gyro', 'Gyroscope', dtAll$featureName)
+dtTidy <- aggregate(dtAll$value,by=list(activity = dtAll$activityName, subject = dtAll$subject),FUN=mean)
+colnames(dtTidy)[3] <- "Mean"
+
+
+write.table(dtTidy,file = "tidydata.txt", row.names = FALSE)
