@@ -41,6 +41,7 @@ dfSelectedFeatures <- dfFeatures[grepl("mean\\(\\)|std\\(\\)",featureName)]
 vfeatures <- paste0("V",dfSelectedFeatures$featureId)
 columns <- c(key(dtAll),vfeatures)
 #Now select these columns
+library(dplyr)
 dtAll <- select(dtAll,dfSelectedFeatures$featureId)
 
 #Read acivity labes from activity_labels.txt
@@ -58,12 +59,12 @@ dtAll <- merge(dtAll , dfSelectedFeatures[, list(featureId, featureName)], by="f
 #Cleanup feature names
 dtAll$featureName <- gsub('-mean',"Mean",dtAll$featureName)
 dtAll$featureName <- gsub('[-()]', '', dtAll$featureName)
-dtAll$featureName <- gsub('^t', 'TimeDomain_', dtAll$featureName)
-dtAll$featureName <- gsub('^f', 'FreqencyDomain_', dtAll$featureName)
-dtAll$featureName <- gsub('Acc', 'Accelerometer', dtAll$featureName)
-dtAll$featureName <- gsub('Gyro', 'Gyroscope', dtAll$featureName)
-dtTidy <- aggregate(dtAll$value,by=list(activity = dtAll$activityName, subject = dtAll$subject),FUN=mean)
-colnames(dtTidy)[3] <- "Mean"
+dtAll$featureName <- gsub('^t', 'TD_', dtAll$featureName)
+dtAll$featureName <- gsub('^f', 'FD_', dtAll$featureName)
+#dtAll$featureName <- gsub('Acc', 'Accelerometer', dtAll$featureName)
+#dtAll$featureName <- gsub('Gyro', 'Gyroscope', dtAll$featureName)
+dtTidy <- aggregate(dtAll$value,by=list(activity = dtAll$activityName, subject = dtAll$subject, features = dtAll$featureName),FUN=mean)
+colnames(dtTidy)[4] <- "Mean"
 
 
 write.table(dtTidy,file = "tidydata.txt", row.names = FALSE)
