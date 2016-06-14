@@ -44,45 +44,46 @@ setnames(dfFeatures,names(dfFeatures),c("featureId","featureName"))
 ```
 ##### 8.Select only those measurement from features which are for mean and std
 ```
-dfSelectedFeatures <- dfFeatures[grepl("mean\\(\\)|std\\(\\)",featureName)]
+dfSelectedFeatures <- dfFeatures[grepl("(mean|std)\\(\\)",featureName)]
 ```
-##### 9. To select the features from dtAll tables we will need to map selected feature names to columns starting with V1,V2....Vn because dtAll table contains columns with these names
+##### 9.Now select these columns
 ```
-vfeatures <- paste0("V",dfSelectedFeatures$featureId)
-columns <- c(key(dtAll),vfeatures)
-```
-##### 10. Select the columns from step 9
-```
+library(dplyr)
 dtAll <- select(dtAll,dfSelectedFeatures$featureId)
 ```
-##### 11. Read acivity labes from activity_labels.txt
+######Assign column names which are selected 
+```
+colnames(dtAll) <- dfSelectedFeatures$featureName
+```
+##### 10. Merge the subject and activity columns with main table i.e. dtAll
+```
+dfSubject_Activity_All <- cbind(dfSubjectAll,dfActivityAll)
+dtAll <- cbind(dfSubject_Activity_All,dtAll)
+setkey(dtAll,subjectId,activityId)
+```
+##### 11. Read the activity names and merge it with main table. And then convert table from wide to narrow format
 ```
 dfActivityLables <- fread("./UCI HAR Dataset/activity_labels.txt")
-setnames(dfActivityLables,names(dfActivityLables),c("activityNum","activityName"))
+setnames(dfActivityLables,names(dfActivityLables),c("activityId","activityName"))
+dtAll <- merge(dtAll,dfActivityLables, by="activityId",all.x = T)
+setkey(dtAll,subjectId,activityId,activityName)
 ```
-##### 12. merge activities with main table i.e. dtAll 
+######reshape the table
 ```
-dtAll <- merge(dtAll,dfActivityLables, by="activityNum",all.x = T)
-setkey(dtAll,subject,activityNum,activityName)
+dtAll <- melt(dtAll,key(dtAll),variable.name = "featureName")
 ```
-##### 13. Reshape the table.
-```
-dtAll <- melt(dtAll,key(dtAll),variable.name = "featureId")
-dtAll <- merge(dtAll , dfSelectedFeatures[, list(featureId, featureName)], by="featureId", all.x=TRUE)
-```
-##### 14. Do some beautification on feature names to remove (), _, -
+#### 12.Cleanup feature names and aggregate the data by activity, subject and features and calculate mean.
 ```
 dtAll$featureName <- gsub('-mean',"Mean",dtAll$featureName)
 dtAll$featureName <- gsub('[-()]', '', dtAll$featureName)
-dtAll$featureName <- gsub('^t', 'TimeDomain_', dtAll$featureName)
-dtAll$featureName <- gsub('^f', 'FreqencyDomain_', dtAll$featureName)
-dtAll$featureName <- gsub('Acc', 'Accelerometer', dtAll$featureName)
-dtAll$featureName <- gsub('Gyro', 'Gyroscope', dtAll$featureName)
-dtTidy <- aggregate(dtAll$value,by=list(activity = dtAll$activityName, subject = dtAll$subject),FUN=mean)
-colnames(dtTidy)[3] <- "Mean"
-```
-##### 15. Write the tidy dataset
-```
+dtAll$featureName <- gsub('^t', 'Time', dtAll$featureName)
+dtAll$featureName <- gsub('^f', 'Freq', dtAll$featureName)
+dtAll$featureName <- gsub('-std', 'StdDev', dtAll$featureName)
+dtAll$featureName <- gsub('-', '', dtAll$featureName)
+dtAll$featureName <- gsub('BodyBody', 'Body', dtAll$featureName)
+
+dtTidy <- aggregate(dtAll$value,by=list(activity = dtAll$activityName, subject = dtAll$subject, features = dtAll$featureName),FUN=mean)
+colnames(dtTidy)[4] <- "Mean"
 write.table(dtTidy,file = "tidydata.txt", row.names = FALSE)
 ```
 
