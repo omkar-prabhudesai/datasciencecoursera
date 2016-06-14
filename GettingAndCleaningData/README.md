@@ -72,7 +72,7 @@ setkey(dtAll,subjectId,activityId,activityName)
 ```
 dtAll <- melt(dtAll,key(dtAll),variable.name = "featureName")
 ```
-#### 12.Cleanup feature names and aggregate the data by activity, subject and features and calculate mean.
+#### 12.Cleanup feature names and aggregate the data by activity, subject and features and calculate mean. Write the data as tidy data into file i.e. tidydata.txt
 ```
 dtAll$featureName <- gsub('-mean',"Mean",dtAll$featureName)
 dtAll$featureName <- gsub('[-()]', '', dtAll$featureName)
